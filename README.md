@@ -5,7 +5,7 @@ A complete machine learning pipeline built with FastAPI, Docker, and Open Web UI
 ## 🚀 Features
 
 - **FastAPI Backend**: RESTful API with sentiment analysis and text generation
-- **Small Text Models**: Uses lightweight models from Hugging Face
+- **LLaMA-family Generation**: Uses the TinyLlama chat model for `/generate`
 - **Docker Containerization**: Complete containerized environment
 - **Open Web UI Frontend**: Modern web interface for interaction
 - **Nginx Reverse Proxy**: Unified access point for all services
@@ -13,15 +13,17 @@ A complete machine learning pipeline built with FastAPI, Docker, and Open Web UI
 
 ## 📋 Prerequisites
 
-- Docker and Docker Compose installed
-- At least 4GB RAM available
-- Internet connection for model downloads
+- Python 3.9+ (for local, no-Docker run)
+- Docker and Docker Compose (for containerized run)
+- At least 4–6GB RAM recommended
+- Internet connection for first-time model downloads
 
 ## 🏗️ Project Structure
 
 ```
 thermoflask/
-├── app.py                    # FastAPI application
+├── app.py                    # FastAPI application (TinyLlama for generation)
+├── app_simple.py             # Lightweight mock API (no model downloads)
 ├── requirements.txt          # Python dependencies
 ├── Dockerfile               # Docker configuration
 ├── docker-compose.yml       # Multi-service orchestration
@@ -30,7 +32,6 @@ thermoflask/
 ├── test_api.py             # API testing script
 ├── start.sh                # Quick start script
 ├── stop.sh                 # Quick stop script
-├── .dockerignore           # Docker ignore file
 ├── frontend/
 │   └── index.html         # Simple web frontend
 └── README.md              # This file
@@ -38,37 +39,60 @@ thermoflask/
 
 ## 🚀 Quick Start
 
-### 1. Build and Start Services
+### A) Run Locally (no Docker)
 
 ```bash
-# Clone or navigate to the project directory
-cd thermoflask
+# 1) Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
 
+# 2) Install dependencies
+pip install -r requirements.txt
+
+# 3) Start the FastAPI app (TinyLlama downloads on first run)
+uvicorn app:app --host 0.0.0.0 --port 8000
+
+# 4) Open in browser
+open http://localhost:8000/docs  # FastAPI docs
+```
+
+- The first run will download the TinyLlama model; this may take a few minutes.
+- If you only want a lightweight mock API (no model download), start:
+
+```bash
+uvicorn app_simple:app --host 0.0.0.0 --port 8000
+```
+
+### B) Run with Docker
+
+```bash
 # Quick start (recommended)
 ./start.sh
 
 # Or manually build and start all services
-docker-compose up --build
+# If you have the plugin:  docker compose up --build
+# If you have the legacy CLI: docker-compose up --build
 ```
 
-### 2. Access the Application
+Note: Ensure Docker Desktop is running before executing the commands above.
 
-Once all services are running, you can access:
+### Access the Application
+
+Once services are running, you can access:
 
 - **Main Application**: http://localhost
-- **API Documentation**: http://localhost/api/docs
+- **API Documentation**: http://localhost/docs or http://localhost/api/docs
 - **Health Check**: http://localhost/health
 - **Direct API**: http://localhost:8000
 
-### 3. Test the API
+### Test the API
 
 ```bash
-# Run the test script
+# Ensure the server is running on :8000, then run:
 python test_api.py
-
-# Or test via the web frontend
-# Open http://localhost in your browser
 ```
+
+Note: the test script expects a field named `generated_class`, while the API returns `generated_text`. Generation will succeed, but that line shows an error in the script output; it does not affect the service. You can test generation directly (see below).
 
 ## 🚀 Quick Commands
 
@@ -143,14 +167,19 @@ Content-Type: application/json
 }
 ```
 
-### Text Generation
+### Text Generation (TinyLlama)
 ```bash
 POST /generate
 Content-Type: application/json
 
 {
-    "text": "Hello, how are you?"
+    "text": "Say hi in a friendly way."
 }
+
+# Example curl
+curl -s -X POST http://localhost:8000/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Say hi in a friendly way."}'
 ```
 
 ### Model Information
@@ -203,8 +232,11 @@ docker-compose exec nginx sh
 # Install dependencies locally
 pip install -r requirements.txt
 
-# Run FastAPI locally
+# Run FastAPI locally (TinyLlama)
 uvicorn app:app --reload --host 0.0.0.0 --port 8000
+
+# Lightweight mock mode (no model download)
+uvicorn app_simple:app --reload --host 0.0.0.0 --port 8000
 
 # Test API locally
 python test_api.py
@@ -242,56 +274,37 @@ environment:
 ### Model Configuration
 
 The application uses these models by default:
-- **Sentiment Analysis**: `distilbert-base-uncased-finetuned-sst-2-english`
-- **Text Generation**: `microsoft/DialoGPT-small`
+- **Sentiment Analysis**: simple keyword-based analyzer (in-code fallback)
+- **Text Generation**: `TinyLlama/TinyLlama-1.1B-Chat-v1.0`
 
-To change models, modify the `app.py` file:
+To change the generation model, edit `app.py` in `load_llama_model()`:
 
 ```python
-# Change model names in the load_model() function
-classifier_name = "your-preferred-sentiment-model"
-model_name = "your-preferred-generation-model"
+# app.py
+model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"  # replace with your preferred HF model
 ```
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-1. **Port Already in Use**
+1. **First run is slow / model download**
+   - TinyLlama is downloaded on first startup. Ensure internet connectivity.
+   - Subsequent runs use the local cache and are faster.
+
+2. **LibreSSL / urllib3 warning on macOS**
+   - You may see `NotOpenSSLWarning` from `urllib3`. This is harmless for local development.
+
+3. **Port Already in Use**
    ```bash
-   # Check what's using the port
    lsof -i :8000
    lsof -i :80
-   
-   # Stop conflicting services
-   sudo systemctl stop nginx  # if nginx is running locally
    ```
 
-2. **Model Download Issues**
+4. **Service Not Starting (Docker)**
    ```bash
-   # Check internet connectivity
-   docker-compose exec ml-api ping huggingface.co
-   
-   # Clear Docker cache
-   docker system prune -a
-   ```
-
-3. **Memory Issues**
-   ```bash
-   # Check memory usage
-   docker stats
-   
-   # Increase Docker memory limit in Docker Desktop settings
-   ```
-
-4. **Service Not Starting**
-   ```bash
-   # Check detailed logs
    docker-compose logs ml-api
-   
-   # Restart with fresh build
-   docker-compose down
-   docker-compose up --build
+   docker-compose down && docker-compose up --build
    ```
 
 ### Performance Optimization
@@ -342,9 +355,9 @@ This project is open source and available under the MIT License.
 
 For issues and questions:
 1. Check the troubleshooting section
-2. Review the logs using `docker-compose logs`
+2. Review logs (`docker-compose logs` or the terminal where you ran `uvicorn`)
 3. Open an issue on the repository
 
 ---
 
-**Note**: The first run may take several minutes as it downloads the ML models from Hugging Face. Subsequent runs will be faster as the models are cached. 
+**Note**: The first run may take several minutes as it downloads the TinyLlama model from Hugging Face. Subsequent runs will be faster as the model is cached. 

@@ -62,7 +62,7 @@ def test_generate():
         print(f"Status: {response.status_code}")
         if response.status_code == 200:
             result = response.json()
-            print(f"Generated class: {result['generated_class']}")
+            print(f"Generated text: {result.get('generated_text', '<no generated_text field>')}")
         else:
             print(f"Error: {response.text}")
     except Exception as e:

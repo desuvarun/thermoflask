@@ -51,11 +51,15 @@ def load_llama_model():
     global model, tokenizer
     try:
         logger.info("Loading Llama model...")
-        # Using a better conversational model
-        model_name = "microsoft/DialoGPT-small"
+        # Using a small LLaMA-family conversational model that can run on CPU
+        model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
         
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForCausalLM.from_pretrained(model_name)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.float32
+        )
+        model.to("cpu")
         
         logger.info("Llama model loaded successfully!")
         return True
